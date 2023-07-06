@@ -6,18 +6,13 @@ pub struct Card {
     name: String,
 }
 
-pub struct User {
-    id: String,
-    username: String,
-}
-
 pub enum CardListType {
     TradeBinder,
     WishList,
 }
 
 pub struct CardList<'a> {
-    user: &'a User,
+    user: String,
     last_updated: DateTime<Utc>,
     category: CardListType,
     cards: HashSet<&'a Card>,
