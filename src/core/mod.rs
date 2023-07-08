@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::data::{CardList, ListContext, SimpleCardList};
 use crate::fetch::{CardListSource, ListRetriever, MoxfieldFetcher, MoxfieldList};
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 
 pub struct CardListRequest {
     pub context: ListContext,

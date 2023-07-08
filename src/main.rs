@@ -1,10 +1,10 @@
 mod data;
 mod fetch;
-mod glue;
+mod core;
 
 use crate::data::{CardListType, ListContext};
 use crate::fetch::{CardListSource, ListRetriever, MoxfieldBoard, MoxfieldFetcher, MoxfieldList};
-use crate::glue::{get_lists, CardListRequest};
+use crate::core::{get_lists, CardListRequest};
 use anyhow::Result;
 use std::collections::HashSet;
 
@@ -42,6 +42,7 @@ fn main() -> Result<()> {
             cl.context.user,
             cl.data.cards.len()
         );
+        println!("{}", cl.data.cards.join("\n"));
     }
 
     // let deck_ids = vec![MoxfieldList::basic("n9-ZrMnGIU2mLoND3UyZvQ")];

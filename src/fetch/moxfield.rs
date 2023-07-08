@@ -50,6 +50,14 @@ pub enum MoxfieldBoard {
     Maybe,
 }
 
+fn mox_board_to_json_field(board: &MoxfieldBoard) -> &'static str {
+    match board {
+        MoxfieldBoard::Main => "mainboard",
+        MoxfieldBoard::Side => "sideboard",
+        MoxfieldBoard::Maybe => "maybeboard",
+    }
+}
+
 #[derive(Hash, PartialEq, Eq, Clone)]
 pub struct MoxfieldList {
     pub deck_id: String,
@@ -80,19 +88,25 @@ pub async fn get_deck_json(deck_id: &str) -> Result<Value> {
     Ok(res)
 }
 
-fn json_to_simple_card_list(json: Value) -> Result<SimpleCardList> {
+fn json_to_simple_card_list(json: Value, boards: &HashSet<&MoxfieldBoard>) -> Result<SimpleCardList> {
     let mut deck: MoxfieldDeck = serde_json::value::from_value(json)?;
     let last_updated: DateTime<Utc> = String::from(deck.last_updated_at_utc).parse()?;
-    let cards = deck.boards.remove(&String::from("mainboard")).unwrap().cards.into_iter().map(|(_k, v)| {
-        v.card.name
-    }).collect::<Vec<Card>>();
+    let mut all_cards: Vec<Card> = vec![];
+    for board in boards.into_iter() {
+        let mox_board = deck.boards.remove(&String::from(mox_board_to_json_field(board))).unwrap();
+        mox_board.cards.into_iter().for_each(|(_k, v)| {
+            all_cards.push(v.card.name);
+        });
+    }
     Ok(SimpleCardList {
         last_updated,
-        cards,
+        cards: all_cards,
     })
 }
 
 pub fn get_decks<'a>(card_lists: impl Iterator<Item=&'a MoxfieldList>) -> Vec<(&'a MoxfieldList, Result<SimpleCardList>)> {
+
+    // Retrieve decks from Moxfield in an async fashion for performance
     let stream = stream::unfold(card_lists.into_iter(), |mut card_lists_iter| async {
         let card_list = card_lists_iter.next()?;
         let net_resp = get_deck_json(&card_list.deck_id).await;
@@ -100,8 +114,10 @@ pub fn get_decks<'a>(card_lists: impl Iterator<Item=&'a MoxfieldList>) -> Vec<(&
     });
     let runtime = tokio::runtime::Builder::new_current_thread().enable_io().enable_time().build().unwrap();
     let results = runtime.block_on(stream.collect::<Vec<(&MoxfieldList, Result<Value>)>>());
+
+    // Convert json/error results into output format
     results.into_iter().map(|(list, res_json)| match res_json {
-        Ok(json) => (list, json_to_simple_card_list(json)),
+        Ok(json) => (list, json_to_simple_card_list(json, &HashSet::from_iter(list.boards.iter()))),
         Err(err) => (list, Err(err)),
     }).collect::<Vec<(&MoxfieldList, Result<SimpleCardList>)>>()
 }
