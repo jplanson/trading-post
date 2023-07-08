@@ -1,13 +1,14 @@
-pub mod moxfield;
+mod moxfield;
 
 use crate::data::SimpleCardList;
-use crate::fetch::moxfield::MoxfieldList;
 use anyhow::Result;
+
+pub use crate::fetch::moxfield::{MoxfieldBoard, MoxfieldFetcher, MoxfieldList};
 
 pub enum CardListSource {
     Moxfield(MoxfieldList),
 }
 
 pub trait ListRetriever<S> {
-    fn fetch(list: impl Iterator<Item = S>) -> Vec<(S, Result<SimpleCardList>)>;
+    fn fetch<'a>(list: impl Iterator<Item = &'a S>) -> Vec<(&'a S, Result<SimpleCardList>)>;
 }

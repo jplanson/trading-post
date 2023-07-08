@@ -2,22 +2,27 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use std::collections::HashSet;
 
-pub struct Card {
-    pub name: String,
-}
+pub type Card = String;
 
-pub type SimpleCardList = Vec<Card>;
+#[derive(Clone)]
+pub struct SimpleCardList {
+    pub last_updated: DateTime<Utc>,
+    pub cards: Vec<Card>,
+}
 
 pub enum CardListType {
     TradeBinder,
     WishList,
 }
 
-pub struct CardList<'a> {
-    user: String,
-    last_updated: DateTime<Utc>,
-    category: CardListType,
-    cards: HashSet<&'a Card>,
+pub struct ListContext {
+    pub user: String,
+    pub category: CardListType,
+}
+
+pub struct CardList {
+    pub context: ListContext,
+    pub data: SimpleCardList,
 }
 
 pub trait TradeSearcher {

@@ -1,5 +1,6 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use std::collections::{HashSet, HashMap};
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use serde::Deserialize;
 use serde_json;
@@ -33,26 +34,34 @@ struct MoxfieldRawBoard {
 
 type MoxfieldBoards = HashMap<String, MoxfieldRawBoard>;
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MoxfieldDeck {
+    last_updated_at_utc: String,
+    boards: MoxfieldBoards,
+}
+
 // -------------------------------------- //
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 pub enum MoxfieldBoard {
     Main,
     Side,
     Maybe,
 }
 
+#[derive(Hash, PartialEq, Eq, Clone)]
 pub struct MoxfieldList {
-    deck_id: String,
-    boards: HashSet<MoxfieldBoard>,
+    pub deck_id: String,
+    pub boards: Vec<MoxfieldBoard>,
 }
 
 impl MoxfieldList {
     pub fn from_vec(deck_id: String, boards: Vec<MoxfieldBoard>) -> Self {
-        MoxfieldList { deck_id, boards: HashSet::from_iter(boards.into_iter()) }
+        MoxfieldList { deck_id, boards }
     }
     pub fn basic(deck_id: &str) -> Self {
-        MoxfieldList { deck_id: String::from(deck_id), boards: HashSet::from_iter(vec![MoxfieldBoard::Main].into_iter()) }
+        MoxfieldList { deck_id: String::from(deck_id), boards: vec![MoxfieldBoard::Main] }
     }
 }
 
@@ -71,41 +80,38 @@ pub async fn get_deck_json(deck_id: &str) -> Result<Value> {
     Ok(res)
 }
 
-fn json_to_simple_card_list(mut json: Value) -> Result<SimpleCardList> {
-    let Some(deck_obj) = json.as_object_mut() else {
-        return Err(anyhow!("Malformed json"));
-    };
-    let Some(boards_json) = deck_obj.remove("boards") else {
-        return Err(anyhow!("Malformed json"));
-    };
-    let mut boards: MoxfieldBoards = serde_json::value::from_value(boards_json)?;
-    let card_list = boards.remove(&String::from("mainboard")).unwrap().cards.into_iter().map(|(_k, v)| {
-        Card { name: v.card.name }
+fn json_to_simple_card_list(json: Value) -> Result<SimpleCardList> {
+    let mut deck: MoxfieldDeck = serde_json::value::from_value(json)?;
+    let last_updated: DateTime<Utc> = String::from(deck.last_updated_at_utc).parse()?;
+    let cards = deck.boards.remove(&String::from("mainboard")).unwrap().cards.into_iter().map(|(_k, v)| {
+        v.card.name
     }).collect::<Vec<Card>>();
-    Ok(card_list)
+    Ok(SimpleCardList {
+        last_updated,
+        cards,
+    })
 }
 
-pub fn get_decks(card_lists: impl Iterator<Item=MoxfieldList>) -> Vec<(MoxfieldList, Result<SimpleCardList>)> {
+pub fn get_decks<'a>(card_lists: impl Iterator<Item=&'a MoxfieldList>) -> Vec<(&'a MoxfieldList, Result<SimpleCardList>)> {
     let stream = stream::unfold(card_lists.into_iter(), |mut card_lists_iter| async {
         let card_list = card_lists_iter.next()?;
         let net_resp = get_deck_json(&card_list.deck_id).await;
         Some(((card_list, net_resp), card_lists_iter))
     });
     let runtime = tokio::runtime::Builder::new_current_thread().enable_io().enable_time().build().unwrap();
-    let results = runtime.block_on(stream.collect::<Vec<(MoxfieldList, Result<Value>)>>());
+    let results = runtime.block_on(stream.collect::<Vec<(&MoxfieldList, Result<Value>)>>());
     results.into_iter().map(|(list, res_json)| match res_json {
         Ok(json) => (list, json_to_simple_card_list(json)),
         Err(err) => (list, Err(err)),
-    }).collect::<Vec<(MoxfieldList, Result<SimpleCardList>)>>()
+    }).collect::<Vec<(&MoxfieldList, Result<SimpleCardList>)>>()
 }
 
 // ---- Interface ---- //
 
-struct MoxfieldFetcher {
-}
+pub struct MoxfieldFetcher {}
 
 impl ListRetriever<MoxfieldList> for MoxfieldFetcher {
-    fn fetch(list: impl Iterator<Item=MoxfieldList>) -> Vec<(MoxfieldList, Result<SimpleCardList>)> {
+    fn fetch<'a>(list: impl Iterator<Item=&'a MoxfieldList>) -> Vec<(&'a MoxfieldList, Result<SimpleCardList>)> {
         get_decks(list)
     }
 }
