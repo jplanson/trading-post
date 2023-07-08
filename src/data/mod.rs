@@ -3,8 +3,10 @@ use chrono::{DateTime, Utc};
 use std::collections::HashSet;
 
 pub struct Card {
-    name: String,
+    pub name: String,
 }
+
+pub type SimpleCardList = Vec<Card>;
 
 pub enum CardListType {
     TradeBinder,
