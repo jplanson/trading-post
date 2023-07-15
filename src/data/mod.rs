@@ -10,6 +10,15 @@ pub struct SimpleCardList {
     pub cards: Vec<Card>,
 }
 
+impl SimpleCardList {
+    pub fn with_current_time(cards: Vec<Card>) -> Self {
+        SimpleCardList {
+            last_updated: chrono::Utc::now(),
+            cards,
+        }
+    }
+}
+
 pub enum CardListType {
     TradeBinder,
     WishList,
