@@ -1,5 +1,10 @@
-use html_parser::{Dom, Node};
 use futures::{StreamExt, stream};
+use html5ever::{ParseOpts, parse_document};
+use html5ever::tree_builder::TreeBuilderOpts;
+use html5ever::rcdom::RcDom;
+use html5ever::rcdom::NodeEnum::Element;
+use html5ever::serialize::{SerializeOpts, serialize};
+use html5ever::tendril::TendrilSink;
 
 use crate::data::{Card, SimpleCardList};
 use crate::fetch::{FetchError, FetchResult, ListRetriever};
@@ -11,6 +16,7 @@ pub type DeckboxList = String;
 pub struct DeckboxFetcher {}
 
 pub async fn get_deck_html(deck_id: &str) -> Result<String, FetchError> {
+    // @Todo - no making a new Client for every request >:(
     let client = reqwest::Client::new();
     let url = format!("https://deckbox.org/sets/{}", deck_id);
     println!("Sending request!");
@@ -24,7 +30,6 @@ pub async fn get_deck_html(deck_id: &str) -> Result<String, FetchError> {
         .text().await.map_err(|err| {
             FetchError::DataParseError(Box::new(err))
         });
-    println!("Got res!");
     res
     // <table class='set_cards with_details simple_table' id='set_cards_table_details'>
 }
@@ -32,6 +37,15 @@ pub async fn get_deck_html(deck_id: &str) -> Result<String, FetchError> {
 fn html_to_simple_card_list(db_list: &DeckboxList, html: String) -> FetchResult {
     println!("Now to parse db_list");
     println!("HTML: {}", &html);
+    let opts = ParseOpts {
+        tree_builder: TreeBuilderOpts {
+            drop_doctype: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let dom: String = parse_document(RcDom::default(), opts)
+        .from_utf8().read_from(&mut html.as_str()).unwrap();
     // let parsed = Dom::parse(html.as_str()).map_err(|err| FetchError::DataParseError(Box::new(err)))?;
     // println!("Parsed db list");
     // for child in parsed.children {
