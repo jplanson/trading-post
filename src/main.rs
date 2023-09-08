@@ -2,11 +2,15 @@ mod core;
 mod data;
 mod fetch;
 
+#[macro_use]
+extern crate html5ever;
+
 use crate::core::{get_lists, CardListRequest};
 use crate::data::{CardListType, ListContext};
 use crate::fetch::{CardListSource, MoxfieldBoard, MoxfieldList};
 use anyhow::Result;
 
+#[allow(unused_variables)]
 fn main() -> Result<()> {
     let lc1 = ListContext {
         user: String::from("Spacewalk"),
@@ -30,10 +34,10 @@ fn main() -> Result<()> {
         context: lc1,
         source: cs4,
     };
-    // let cr2 = CardListRequest {
-    //     context: lc2,
-    //     source: cs3,
-    // };
+    let cr2 = CardListRequest {
+        context: lc2,
+        source: cs3,
+    };
 
     let card_lists = get_lists(vec![cr1]); // cr2]);
     for cl in card_lists.iter() {
