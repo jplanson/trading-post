@@ -1,14 +1,14 @@
 extern crate markup5ever_rcdom as rcdom;
 
-use core::cell::RefCell;
 use futures::{StreamExt, stream};
 use html5ever::{local_name, ParseOpts, parse_document, LocalNameStaticSet};
 use html5ever::tree_builder::TreeBuilderOpts;
-use html5ever::serialize::{SerializeOpts, serialize};
 use html5ever::tendril::TendrilSink;
-use rcdom::{RcDom, NodeData, Handle};
-use markup5ever::interface::Attribute;
+use rcdom::{RcDom, NodeData, Handle, Node};
+use markup5ever::interface::{Attribute, QualName};
 use string_cache::Atom;
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use crate::data::{Card, SimpleCardList};
 use crate::fetch::{FetchError, FetchResult, ListRetriever};
@@ -38,25 +38,48 @@ pub async fn get_deck_html(deck_id: &str) -> Result<String, FetchError> {
     // <table class='set_cards with_details simple_table' id='set_cards_table_details'>
 }
 
-fn get_by_attr<'a>(handle: Handle, name: &Atom<LocalNameStaticSet>, value: &str) -> Option<Handle> {
+type WalkFn<'f> = &'f dyn Fn(usize, &QualName, &RefCell<Vec<Attribute>>) -> bool;
+
+fn walk<'a>(handle: Handle, depth: usize, stop: WalkFn<'_>) -> Option<Handle> {
     // @Todo - ensure this algorithm doesn't involve cloning the underlying data
-    match handle.data {
-        NodeData::Element { ref attrs, .. } => {
-            for attr in attrs.borrow().iter() {
-                if attr.name.local == *name && attr.value.to_string() == value {
-                    return Some(handle.clone());
-                }
-            }
-        },
-        _ => (),
-    }
-    for child in handle.children.borrow().iter() {
-        let opt_res = get_by_attr(child.clone(), name, value);
-        if opt_res.is_some() {
-            return opt_res;
+    if let NodeData::Element {
+        ref name,
+        ref attrs,
+        ..
+    } = handle.data
+    {
+        if stop(depth, name, attrs) {
+            return Some(handle);
         }
     }
-    return None;
+    for child in handle.children.borrow().iter() {
+        if let Some(handle) = walk(Rc::clone(child), depth + 1, stop) {
+            return Some(handle);
+        }
+    }
+    None
+}
+
+fn get_by_name(handle: Handle, srch_name: Atom<LocalNameStaticSet>) -> Option<Handle> {
+    walk(handle, 0, &|_d, qn: &QualName, _vs| qn.local == srch_name)
+}
+
+fn get_by_attr(handle: Handle, name: Atom<LocalNameStaticSet>, value: &str) -> Option<Handle> {
+    walk(handle, 0, &|_d, _qn, vs| {
+        for attr in vs.borrow().iter() {
+            if attr.name.local == name && attr.value.to_string() == value {
+                return true;
+            }
+        }
+        false
+    })
+}
+
+fn pretty_print(handle: Handle) -> () {
+    walk(handle, 0, &|d, qn, _vs| {
+        println!("{}{}", "  ".repeat(d), qn.local);
+        false
+    });
 }
 
 fn html_to_simple_card_list(db_list: &DeckboxList, html: String) -> FetchResult {
@@ -69,28 +92,32 @@ fn html_to_simple_card_list(db_list: &DeckboxList, html: String) -> FetchResult 
     };
     let dom = parse_document(RcDom::default(), opts)
         .from_utf8().read_from(&mut html.as_bytes()).unwrap();
-    let Some(card_table_handle) = get_by_attr(dom.document, &local_name!("id"), "set_cards_table_details") else {
+    let document = Rc::clone(&dom.document);
+    let Some(card_table_handle) = get_by_attr(document, local_name!("id"), "set_cards_table_details") else {
         panic!("Failed to find table of cards"); // @Todo - handle this error instead
     };
-    println!("{:?}", card_table_handle);
+    println!("Num returned children: {}", card_table_handle.children.borrow().len());
     let mut cards: Vec<String> = vec![];
-    let card_handles = card_table_handle.children.borrow();
-    let mut card_handles_iter = card_handles.iter();
-    card_handles_iter.next(); // Skip the header and empty row
-    card_handles_iter.next();
-    for child in card_handles_iter {
-        println!("{:?}", child);
-        let Some(card_entry) = get_by_attr(child.clone(), &local_name!("class"), "simple") else {
-            continue;
-        };
-        match card_entry.data {
-            NodeData::Text { ref contents } => {
-                cards.push(contents.borrow().to_string());
-            },
-            _ => (),
-        }
-    }
-    println!("{:?}", cards);
+    let Some(tbody) = get_by_name(card_table_handle, local_name!("tbody")) else {
+        panic!("Failed to find tbody");
+    };
+    // let card_handles = card_table_handle.children.borrow();
+    // let mut card_handles_iter = card_handles.iter();
+    // card_handles_iter.next(); // Skip the header and empty row
+    // card_handles_iter.next();
+    // for child in card_handles_iter {
+    //     println!("{:?}\n\n\n", child);
+        // let Some(card_entry) = get_by_attr(child.clone(), &local_name!("class"), "simple") else {
+        //     continue;
+        // };
+        // match card_entry.data {
+        //     NodeData::Text { ref contents } => {
+        //         cards.push(contents.borrow().to_string());
+        //     },
+        //     _ => (),
+        // }
+    // }
+    // println!("{:?}", cards);
     Ok(SimpleCardList::with_current_time(vec![]))
 }
 
