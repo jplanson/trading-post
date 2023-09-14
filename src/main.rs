@@ -46,7 +46,7 @@ fn main() -> Result<()> {
             cl.context.user,
             cl.data.cards.len()
         );
-        // println!("{}", cl.data.cards.join("\n"));
+        println!("{:?}", cl.data.cards);
     }
 
     // let deck_ids = vec![MoxfieldList::basic("n9-ZrMnGIU2mLoND3UyZvQ")];

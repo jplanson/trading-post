@@ -20,23 +20,23 @@ pub fn get_lists(requests: Vec<CardListRequest>) -> Vec<CardList> {
             CardListSource::Deckbox(dl) => db_requests.push(dl.clone()),
         };
     }
-    let mox_results = MoxfieldFetcher::fetch(mox_requests.iter())
+    let mut mox_results = MoxfieldFetcher::fetch(mox_requests.iter())
         .into_iter()
         .collect::<HashMap<&MoxfieldList, FetchResult>>();
-    let db_results = DeckboxFetcher::fetch(db_requests.iter())
+    let mut db_results = DeckboxFetcher::fetch(db_requests.iter())
         .into_iter()
         .collect::<HashMap<&DeckboxList, FetchResult>>();
-    let cards = requests
+    requests
         .into_iter()
         .filter_map(|req| {
             let res = match req.source {
-                CardListSource::Moxfield(ml) => mox_results.get(&ml).unwrap().clone(),
-                CardListSource::Deckbox(db) => db_results.get(&db).unwrap().clone(),
+                CardListSource::Moxfield(ml) => mox_results.remove(&ml).unwrap(),
+                CardListSource::Deckbox(db) => db_results.remove(&db).unwrap(),
             };
             match res {
                 Ok(x) => Some(CardList {
                     context: req.context,
-                    data: x.clone(),
+                    data: x,
                 }),
                 Err(x) => {
                     // @Todo - better error handling
@@ -45,6 +45,5 @@ pub fn get_lists(requests: Vec<CardListRequest>) -> Vec<CardList> {
                 }
             }
         })
-        .collect::<Vec<CardList>>();
-    cards
+        .collect::<Vec<CardList>>()
 }

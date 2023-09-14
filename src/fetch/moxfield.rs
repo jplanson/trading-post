@@ -4,9 +4,7 @@ use std::collections::{HashSet, HashMap};
 use chrono::{DateTime, Utc};
 use serde_json::Value;
 use serde::Deserialize;
-use serde_json;
 use futures::{StreamExt, stream};
-use tokio;
 
 use crate::fetch::{FetchResult, FetchError, ListRetriever};
 use crate::data::{Card, SimpleCardList};
@@ -129,9 +127,9 @@ enum MoxfieldAPIResponse {
 
 
 fn moxdeck_to_simple_card_list(mut deck: MoxfieldDeck, boards: &HashSet<&MoxfieldBoard>) -> FetchResult {
-    let last_updated: DateTime<Utc> = String::from(deck.last_updated_at_utc).parse().map_err(|err| FetchError::DataParseError(Box::new(err)))?;
+    let last_updated: DateTime<Utc> = deck.last_updated_at_utc.parse().map_err(|err| FetchError::DataParseError(Box::new(err)))?;
     let mut all_cards: Vec<Card> = vec![];
-    for board in boards.into_iter() {
+    for board in boards.iter() {
         let mox_board = deck.boards.remove(&String::from(mox_board_to_json_field(board))).unwrap();
         mox_board.cards.into_iter().for_each(|(_k, v)| {
             all_cards.push(v.card.name);
